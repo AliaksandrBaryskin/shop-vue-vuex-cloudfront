@@ -49,19 +49,36 @@ import Vue from 'vue';
 
 import axios from 'axios';
 
+function getAuthToken(): { Authorization: string } {
+	let token = localStorage.getItem("authorization_token");
+
+	if (!token) {
+		token = btoa("AliaksandrBaryskin:TEST_PASSWORD");
+		localStorage.setItem(
+			"authorization_token",
+			token
+		);
+	}
+
+  	return { Authorization: `Basic ${token}` };
+}
+
 const fetchPresignedS3Url = (url: string, fileName: string) => {
+	const authToken = getAuthToken();
+	console.log(authToken);
+
 	return axios({
 		method: 'GET',
 		url,
 		params: {
 			name: encodeURIComponent(fileName),
 		},
-	});
+		headers: authToken
+	});	
 };
 
 const uploadFileBy = async (url: string, file: File) => {
 	const destUrl = await fetchPresignedS3Url(url, file.name);
-
 	console.log('Uploading to: ', destUrl.data);
 
 	// save
@@ -119,9 +136,17 @@ export default Vue.extend({
 			try {
 				await uploadFileBy(this.url, this.file as File);
 			} catch (e) {
+				console.log("Error", e);
 				const msg = this.$t('errorMessage.cantUploadFile', {
 					reason: e.message,
 				});
+
+				if (e?.response?.status === 403) {
+					alert("403 Forbidden \nLocal Storage has wrong authorization_token (password)");
+				}
+				if (e?.response?.status === 401) {
+					alert("401 Unauthorized \nLocal Storage has not authorization_token (password)");
+				}
 
 				this.showSnackbarMessage(msg.toString());
 			} finally {
